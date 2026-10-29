@@ -15,11 +15,13 @@ import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as ContactsRouteImport } from './routes/contacts'
 import { Route as DevicesRouteImport } from './routes/devices'
 import { Route as GuardianRouteImport } from './routes/guardian'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as MedicalRouteImport } from './routes/medical'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as PulseRouteImport } from './routes/pulse'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ShieldRouteImport } from './routes/shield'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TravelRouteImport } from './routes/travel'
 import { Route as VaultRouteImport } from './routes/vault'
 
@@ -53,6 +55,11 @@ const GuardianRoute = GuardianRouteImport.update({
   path: '/guardian',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MedicalRoute = MedicalRouteImport.update({
   id: '/medical',
   path: '/medical',
@@ -78,6 +85,11 @@ const ShieldRoute = ShieldRouteImport.update({
   path: '/shield',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TravelRoute = TravelRouteImport.update({
   id: '/travel',
   path: '/travel',
@@ -96,11 +108,13 @@ export interface FileRoutesByFullPath {
   '/contacts': typeof ContactsRoute
   '/devices': typeof DevicesRoute
   '/guardian': typeof GuardianRoute
+  '/login': typeof LoginRoute
   '/medical': typeof MedicalRoute
   '/notifications': typeof NotificationsRoute
   '/pulse': typeof PulseRoute
   '/settings': typeof SettingsRoute
   '/shield': typeof ShieldRoute
+  '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
   '/vault': typeof VaultRoute
 }
@@ -111,11 +125,13 @@ export interface FileRoutesByTo {
   '/contacts': typeof ContactsRoute
   '/devices': typeof DevicesRoute
   '/guardian': typeof GuardianRoute
+  '/login': typeof LoginRoute
   '/medical': typeof MedicalRoute
   '/notifications': typeof NotificationsRoute
   '/pulse': typeof PulseRoute
   '/settings': typeof SettingsRoute
   '/shield': typeof ShieldRoute
+  '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
   '/vault': typeof VaultRoute
 }
@@ -127,11 +143,13 @@ export interface FileRoutesById {
   '/contacts': typeof ContactsRoute
   '/devices': typeof DevicesRoute
   '/guardian': typeof GuardianRoute
+  '/login': typeof LoginRoute
   '/medical': typeof MedicalRoute
   '/notifications': typeof NotificationsRoute
   '/pulse': typeof PulseRoute
   '/settings': typeof SettingsRoute
   '/shield': typeof ShieldRoute
+  '/signup': typeof SignupRoute
   '/travel': typeof TravelRoute
   '/vault': typeof VaultRoute
 }
@@ -144,11 +162,13 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/devices'
     | '/guardian'
+    | '/login'
     | '/medical'
     | '/notifications'
     | '/pulse'
     | '/settings'
     | '/shield'
+    | '/signup'
     | '/travel'
     | '/vault'
   fileRoutesByTo: FileRoutesByTo
@@ -159,11 +179,13 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/devices'
     | '/guardian'
+    | '/login'
     | '/medical'
     | '/notifications'
     | '/pulse'
     | '/settings'
     | '/shield'
+    | '/signup'
     | '/travel'
     | '/vault'
   id:
@@ -174,11 +196,13 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/devices'
     | '/guardian'
+    | '/login'
     | '/medical'
     | '/notifications'
     | '/pulse'
     | '/settings'
     | '/shield'
+    | '/signup'
     | '/travel'
     | '/vault'
   fileRoutesById: FileRoutesById
@@ -190,11 +214,13 @@ export interface RootRouteChildren {
   ContactsRoute: typeof ContactsRoute
   DevicesRoute: typeof DevicesRoute
   GuardianRoute: typeof GuardianRoute
+  LoginRoute: typeof LoginRoute
   MedicalRoute: typeof MedicalRoute
   NotificationsRoute: typeof NotificationsRoute
   PulseRoute: typeof PulseRoute
   SettingsRoute: typeof SettingsRoute
   ShieldRoute: typeof ShieldRoute
+  SignupRoute: typeof SignupRoute
   TravelRoute: typeof TravelRoute
   VaultRoute: typeof VaultRoute
 }
@@ -243,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuardianRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/medical': {
       id: '/medical'
       path: '/medical'
@@ -278,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShieldRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/travel': {
       id: '/travel'
       path: '/travel'
@@ -302,11 +342,13 @@ const rootRouteChildren: RootRouteChildren = {
   ContactsRoute: ContactsRoute,
   DevicesRoute: DevicesRoute,
   GuardianRoute: GuardianRoute,
+  LoginRoute: LoginRoute,
   MedicalRoute: MedicalRoute,
   NotificationsRoute: NotificationsRoute,
   PulseRoute: PulseRoute,
   SettingsRoute: SettingsRoute,
   ShieldRoute: ShieldRoute,
+  SignupRoute: SignupRoute,
   TravelRoute: TravelRoute,
   VaultRoute: VaultRoute,
 }
