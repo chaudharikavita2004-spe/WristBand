@@ -10,11 +10,13 @@ import {
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
+import { supabase } from "@/lib/supabase";
 
 function NotFoundComponent() {
   return (
@@ -144,15 +146,79 @@ function RootComponent() {
   const isAuthPage =
     pathname === "/login" || pathname === "/signup";
 
+  const [checkingAuth, setCheckingAuth] = useState(!isAuthPage);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkSession() {
+      if (isAuthPage) {
+        setCheckingAuth(false);
+        return;
+      }
+
+      setCheckingAuth(true);
+
+      try {
+        const { data, error } = await supabase.auth.getUser();
+
+        if (!active) return;
+
+        if (error || !data.user) {
+          window.location.replace("/login");
+          return;
+        }
+
+        setIsSignedIn(true);
+        setCheckingAuth(false);
+      } catch {
+        if (!active) return;
+        window.location.replace("/login");
+      }
+    }
+
+    void checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (!active) return;
+
+      if (event === "SIGNED_OUT") {
+        setIsSignedIn(false);
+
+        if (!isAuthPage) {
+          window.location.replace("/login");
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [isAuthPage]);
+
   return (
     <QueryClientProvider client={queryClient}>
       {isAuthPage ? (
         <Outlet />
+      ) : checkingAuth || !isSignedIn ? (
+        <main className="flex min-h-screen items-center justify-center bg-[#07111f] text-cyan-300">
+          <div className="text-center">
+            <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-cyan-300/20 border-t-cyan-300" />
+            <p className="mt-4 text-sm text-slate-400">
+              Checking your secure session...
+            </p>
+          </div>
+        </main>
       ) : (
         <AppShell>
           <Outlet />
         </AppShell>
       )}
+
       <Toaster richColors position="top-center" />
     </QueryClientProvider>
   );
