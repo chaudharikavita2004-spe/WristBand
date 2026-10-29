@@ -1,31 +1,68 @@
 # WristBand — Intelligent Women's Safety & Emergency Response System
 
-This package contains two implementations of WristBand:
+WristBand is a women's safety application designed to provide access to emergency assistance, personal safety tools, evidence storage, and travel safety features.
 
-| Folder | What it is | Status |
+## Project Structure
+
+This repository contains two implementations of WristBand:
+
+| Folder | Description | Status |
 |---|---|---|
-| `web-app/` | The original WristBand app (React + TanStack Start), exactly as built in Lovable. Stores data in the browser only. | Working, preserved unchanged |
-| `frontend/` + `backend/` + `database/` | The requested stack: HTML/CSS/Vanilla JS frontend, Python Flask REST API, Supabase (Auth, Postgres, RLS, Realtime, Storage). | Working against the in-memory backend and tests; needs your Supabase project for real use |
+| `web-app/` | React and TanStack Start application. Stores application data in the browser. | Runs locally; backend integration requires further work. |
+| `frontend/` + `backend/` + `database/` | Vanilla JavaScript frontend, Python Flask REST API, and Supabase integration structure. | Supports local development; production use requires configuration and testing. |
 
-## Quick start (Flask stack)
+## Quick Start — React Application
 
 ```bash
-cp .env.example .env            # fill in Supabase values, or set DATA_BACKEND=memory to try locally
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-pytest                          # runs unit + API tests
-flask --app wsgi run --port 5000
-# in another terminal
-cd frontend && cp js/config.example.js js/config.js && python -m http.server 5500
+cd web-app
+npm install
+npm run dev
 ```
-Open http://localhost:5500/login.html.
 
-Apply database migrations in order from `database/migrations/` (Supabase SQL editor or `supabase db push`). See `docs/SETUP.md`.
+Open the local URL displayed in the terminal.
 
-## What is real vs. what needs external setup
-- **Works now:** dashboard, SOS trigger/cancel with PIN and duress PIN, emergency contacts, evidence vault upload/list/delete, travel journeys + location points, devices, admin stats, role-protected admin endpoints, Web Bluetooth heart-rate pairing in Chrome/Edge.
-- **Requires credentials:** SMS alerts need Twilio keys; without them, alerts are recorded as `not_sent` and the UI says so.
-- **Not implemented:** phone calls, emergency-services dispatch, background GPS tracking when the browser is closed. Location only works while the page is open and permission is granted.
+## Quick Start — Flask Application
 
-Docs: `docs/SETUP.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/DEPLOYMENT.md`, `docs/VALIDATION_REPORT.md`.
+Configure the environment and install the backend dependencies:
+
+```bash
+python -m venv .venv
+```
+
+On Git Bash for Windows, activate the environment with:
+
+```bash
+source .venv/Scripts/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+Configure the environment variables using `.env.example`. For local testing, review the supported backend configuration in the setup documentation.
+
+Start the Flask backend from the `backend/` directory using the documented application entry point. Serve the `frontend/` directory separately and open its login page in your browser.
+
+## Database Setup
+
+Configure your Supabase project before using the application with a real database. Apply the SQL migrations in order from `database/migrations/` using the appropriate Supabase workflow.
+
+Refer to `docs/SETUP.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/DEPLOYMENT.md` for project guidance.
+
+## Features and Limitations
+
+The repository includes dashboard, SOS, emergency contacts, evidence vault, travel journeys, device management, and administrative functionality in the Flask implementation.
+
+- SMS notifications require valid Twilio credentials.
+- Real database functionality requires Supabase configuration.
+- Phone calls and emergency-services dispatch are not implemented.
+- Background GPS tracking when the browser is closed is not implemented.
+- Location access depends on browser permissions and the page remaining open.
+
+Features and integrations must be tested in the configured environment before production use.
+
+## Security
+
+Never commit real passwords, API keys, access tokens, or other secrets to GitHub. Keep credentials in environment variables and exclude local `.env` files from version control.

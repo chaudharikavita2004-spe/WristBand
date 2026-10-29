@@ -1,29 +1,44 @@
-# Welcome to your Lovable project
+# WristBand — Web Application
 
-This project was built with [Lovable](https://lovable.dev).
+WristBand is an intelligent women's safety and emergency response application.
 
-## Build with Lovable
+## Technology Stack
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+- React
+- TypeScript
+- TanStack Start
+- Vite
+- Tailwind CSS
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+## Run Locally
 
-## Development
+Make sure Node.js and npm are installed.
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+```bash
+npm install
 npm run dev
 ```
 
-## Built with
+Open the local URL displayed in the terminal.
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+## Production Build
+
+To create a production build, run:
+
+```bash
+npm run build
+```
+
+## Tests
+
+To run the automated tests, use:
+
+```bash
+npm test
+```
+
+## Application Status
+
+This web application currently stores its state in the browser. Persistent accounts, server-side storage, and emergency-service integrations require additional configuration and testing.
+
+For the Flask backend, database setup, and other project components, refer to the main repository README and the `docs/` directory.
