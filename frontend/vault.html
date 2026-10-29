@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evidence Vault — WristBand</title>
+  <meta name="description" content="WristBand women's safety platform: Evidence Vault." />
+  <link rel="icon" href="assets/logo.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html"><img src="assets/logo.png" alt="" width="32" height="32" /> WristBand</a>
+    <nav aria-label="Main"><a href="index.html">Dashboard</a><a href="contacts.html">Contacts</a><a href="travel.html">Travel Safety</a><a href="vault.html" aria-current="page">Evidence Vault</a><a href="devices.html">Devices</a><a href="profile.html">Profile & PINs</a><a href="admin.html">Admin</a></nav>
+    <button id="sos-btn" class="sos" type="button">SOS</button>
+    <button id="logout" class="ghost" type="button">Sign out</button>
+  </header>
+  <main id="main">
+    <h1>Evidence Vault</h1>
+    <div id="flash" role="status" aria-live="polite"></div>
+    <p class="note">Files are stored in a private bucket readable only by you. Download links expire after 5 minutes.</p>
+    <form id="upload-form" class="card">
+      <label>File <input name="file" type="file" required accept="image/*,audio/*,video/*,application/pdf,text/plain" /></label>
+      <label>Note <input name="note" maxlength="500" /></label>
+      <button type="submit">Upload securely</button>
+    </form>
+    <ul id="evidence-list" class="list"></ul>
+  </main>
+  <dialog id="sos-dialog">
+    <h2>SOS active</h2>
+    <p id="sos-msg"></p>
+    <label>Enter PIN to cancel <input id="sos-pin" type="password" inputmode="numeric" maxlength="8" /></label>
+    <div class="row"><button id="sos-cancel" type="button">Cancel SOS</button><button id="sos-close" class="ghost" type="button">Keep active</button></div>
+  </dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/sos.js"></script>
+  <script src="js/pages/vault.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WristBand Secure Login</title>
+  <meta name="description" content="Sign in to WristBand, the women's safety platform." />
+  <link rel="icon" href="assets/logo.png" /><link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="center">
+  <form id="login-form" class="card narrow">
+    <img src="assets/logo.png" alt="WristBand logo" width="64" height="64" />
+    <h1>WristBand Secure Login</h1>
+    <div id="flash" role="status" aria-live="polite"></div>
+    <label>Email <input name="email" type="email" required autocomplete="email" /></label>
+    <label>Password <input name="password" type="password" required minlength="8" autocomplete="current-password" /></label>
+    <div class="row"><button type="submit" name="mode" value="signin">Sign in</button><button type="submit" name="mode" value="signup" class="ghost">Create account</button></div>
+  </form>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/pages/login.js"></script>
+</body>
+</html>

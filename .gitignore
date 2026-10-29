@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.pytest_cache/
+node_modules/
+dist/
+.output/
+frontend/js/config.js
+*.log
+.DS_Store

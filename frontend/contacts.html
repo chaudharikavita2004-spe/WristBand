@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Emergency Contacts — WristBand</title>
+  <meta name="description" content="WristBand women's safety platform: Emergency Contacts." />
+  <link rel="icon" href="assets/logo.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html"><img src="assets/logo.png" alt="" width="32" height="32" /> WristBand</a>
+    <nav aria-label="Main"><a href="index.html">Dashboard</a><a href="contacts.html" aria-current="page">Contacts</a><a href="travel.html">Travel Safety</a><a href="vault.html">Evidence Vault</a><a href="devices.html">Devices</a><a href="profile.html">Profile & PINs</a><a href="admin.html">Admin</a></nav>
+    <button id="sos-btn" class="sos" type="button">SOS</button>
+    <button id="logout" class="ghost" type="button">Sign out</button>
+  </header>
+  <main id="main">
+    <h1>Emergency Contacts</h1>
+    <div id="flash" role="status" aria-live="polite"></div>
+    <form id="contact-form" class="card">
+      <label>Name <input name="name" required maxlength="100" /></label>
+      <label>Phone <input name="phone" required placeholder="+91 98765 43210" /></label>
+      <label>Relation <input name="relation" maxlength="50" /></label>
+      <label>Priority <input name="priority" type="number" min="1" max="10" value="1" /></label>
+      <button type="submit">Add contact</button>
+    </form>
+    <ul id="contact-list" class="list"></ul>
+  </main>
+  <dialog id="sos-dialog">
+    <h2>SOS active</h2>
+    <p id="sos-msg"></p>
+    <label>Enter PIN to cancel <input id="sos-pin" type="password" inputmode="numeric" maxlength="8" /></label>
+    <div class="row"><button id="sos-cancel" type="button">Cancel SOS</button><button id="sos-close" class="ghost" type="button">Keep active</button></div>
+  </dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/sos.js"></script>
+  <script src="js/pages/contacts.js"></script>
+</body>
+</html>
