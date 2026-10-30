@@ -17,6 +17,7 @@ import appCss from "../styles.css?url";
 import { AppShell } from "@/components/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/lib/supabase";
+import { useApp } from "@/lib/store";
 
 function NotFoundComponent() {
   return (
@@ -139,6 +140,8 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const app = useApp();
+
   const pathname = useLocation({
     select: (location) => location.pathname,
   });
@@ -170,10 +173,39 @@ function RootComponent() {
           return;
         }
 
+        const user = data.user;
+
+        // Load the profile belonging to the authenticated account.
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("full_name, phone")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+
+        if (!active) return;
+
+        // Synchronize the authenticated profile with the shared app store.
+        app.set({
+          demoMode: false,
+          profile: {
+            ...app.profile,
+            name:
+              profileData?.full_name ||
+              user.user_metadata?.full_name ||
+              "User",
+            email: user.email || "",
+            phone: profileData?.phone || "",
+          },
+        });
+
         setIsSignedIn(true);
         setCheckingAuth(false);
-      } catch {
+      } catch (error) {
         if (!active) return;
+
+        console.error("Authentication/profile loading failed:", error);
         window.location.replace("/login");
       }
     }
