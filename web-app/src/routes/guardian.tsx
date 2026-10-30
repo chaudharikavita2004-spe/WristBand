@@ -37,6 +37,8 @@ export const Route = createFileRoute("/guardian")({
 function Guardian() {
   const s = useApp();
 
+  const [profileName, setProfileName] = useState(s.profile.name);
+
   const [grants, setGrants] = useState<GuardianGrant[]>([]);
   const [events, setEvents] = useState<SosEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,7 +54,10 @@ function Guardian() {
   const demoActive = s.incidents.filter((i) => i.status === "active");
 
   useEffect(() => {
-    if (s.demoMode) return;
+    if (s.demoMode) {
+      setProfileName(s.profile.name);
+      return;
+    }
 
     let cancelled = false;
 
@@ -67,6 +72,24 @@ function Guardian() {
 
         const user = userData.user;
         if (!user) throw new Error("Please sign in again.");
+
+        // Load the name belonging to the currently authenticated account.
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+
+        const accountName =
+          profileData?.full_name ||
+          user.user_metadata?.full_name ||
+          "User";
+
+        if (!cancelled) {
+          setProfileName(accountName);
+        }
 
         const { data: sessionData, error: sessionError } =
           await supabase.auth.getSession();
@@ -126,7 +149,7 @@ function Guardian() {
     return () => {
       cancelled = true;
     };
-  }, [s.demoMode]);
+  }, [s.demoMode, s.profile.name]);
 
   async function createGuardianGrant() {
     if (!s.consent.guardian) {
@@ -233,7 +256,7 @@ function Guardian() {
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Guardian Dashboard"
-        desc={`Preview of what authorized guardians see for ${s.profile.name}.`}
+        desc={`Preview of what authorized guardians see for ${profileName}.`}
       />
 
       {!s.consent.guardian && (
