@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { apiRequest } from "@/lib/api";
 import { useApp, fmt } from "@/lib/store";
 import { seo } from "@/lib/seo";
 import { PageHeader } from "@/components/AppShell";
@@ -41,7 +42,12 @@ function Guardian() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Demo mode continues using the existing local sample data.
+  const [guardianUserId, setGuardianUserId] = useState("");
+  const [canViewAlerts, setCanViewAlerts] = useState(true);
+  const [canViewLocation, setCanViewLocation] = useState(false);
+  const [creatingGrant, setCreatingGrant] = useState(false);
+
+  // Demo mode continues using existing local sample data.
   const demoGranted = s.contacts.filter((c) => c.guardianAccess);
   const demoActive = s.incidents.filter((i) => i.status === "active");
 
@@ -62,15 +68,22 @@ function Guardian() {
         const user = userData.user;
         if (!user) throw new Error("Please sign in again.");
 
-        const [grantResult, eventResult] = await Promise.all([
-          supabase
-            .from("guardian_access")
-            .select(
-              "id, guardian_user_id, can_view_alerts, can_view_location, expires_at, revoked_at",
-            )
-            .eq("user_id", user.id)
-            .is("revoked_at", null)
-            .order("created_at", { ascending: false }),
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
+
+        if (sessionError) throw sessionError;
+
+        const accessToken = sessionData.session?.access_token;
+
+        if (!accessToken) {
+          throw new Error("Please sign in again.");
+        }
+
+        const [grantData, eventResult] = await Promise.all([
+          apiRequest<GuardianGrant[]>(
+            "/api/guardian/grants",
+            accessToken,
+          ),
 
           supabase
             .from("sos_events")
@@ -87,11 +100,10 @@ function Guardian() {
             .order("created_at", { ascending: false }),
         ]);
 
-        if (grantResult.error) throw grantResult.error;
         if (eventResult.error) throw eventResult.error;
 
         if (!cancelled) {
-          setGrants((grantResult.data ?? []) as GuardianGrant[]);
+          setGrants(grantData);
           setEvents((eventResult.data ?? []) as SosEvent[]);
         }
       } catch (error) {
@@ -116,16 +128,85 @@ function Guardian() {
     };
   }, [s.demoMode]);
 
+  async function createGuardianGrant() {
+    if (!s.consent.guardian) {
+      toast.error("Enable Guardian Access in the consent center first.");
+      return;
+    }
+
+    const normalizedId = guardianUserId.trim();
+
+    if (!normalizedId) {
+      toast.error("Please enter the guardian's User ID.");
+      return;
+    }
+
+    setCreatingGrant(true);
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Please sign in again.");
+      }
+
+      const newGrant = await apiRequest<GuardianGrant>(
+        "/api/guardian/grants",
+        accessToken,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            guardian_user_id: normalizedId,
+            can_view_alerts: canViewAlerts,
+            can_view_location: canViewLocation,
+          }),
+        },
+      );
+
+      setGrants((current) => [newGrant, ...current]);
+      setGuardianUserId("");
+
+      toast.success("Guardian access granted.");
+    } catch (error) {
+      console.error("Guardian grant creation error:", error);
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not grant guardian access.",
+      );
+    } finally {
+      setCreatingGrant(false);
+    }
+  }
+
   async function revokeGuardian(grantId: string) {
     setSavingId(grantId);
 
     try {
-      const { error } = await supabase
-        .from("guardian_access")
-        .update({ revoked_at: new Date().toISOString() })
-        .eq("id", grantId);
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
 
-      if (error) throw error;
+      if (sessionError) throw sessionError;
+
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Please sign in again.");
+      }
+
+      await apiRequest<{ message: string }>(
+        `/api/guardian/grants/${grantId}/revoke`,
+        accessToken,
+        {
+          method: "PATCH",
+        },
+      );
 
       setGrants((current) =>
         current.filter((grant) => grant.id !== grantId),
@@ -230,6 +311,70 @@ function Guardian() {
               </>
             ) : (
               <>
+                <div className="space-y-3 border-b pb-4">
+                  <div>
+                    <label
+                      htmlFor="guardian-user-id"
+                      className="mb-1 block text-sm font-medium"
+                    >
+                      Guardian User ID
+                    </label>
+
+                    <input
+                      id="guardian-user-id"
+                      type="text"
+                      value={guardianUserId}
+                      onChange={(event) =>
+                        setGuardianUserId(event.target.value)
+                      }
+                      placeholder="Paste the guardian's Supabase User ID"
+                      disabled={creatingGrant || !s.consent.guardian}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={canViewAlerts}
+                      onChange={(event) =>
+                        setCanViewAlerts(event.target.checked)
+                      }
+                      disabled={creatingGrant || !s.consent.guardian}
+                    />
+                    Allow emergency alerts
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={canViewLocation}
+                      onChange={(event) =>
+                        setCanViewLocation(event.target.checked)
+                      }
+                      disabled={creatingGrant || !s.consent.guardian}
+                    />
+                    Allow location access
+                  </label>
+
+                  <Button
+                    onClick={createGuardianGrant}
+                    disabled={
+                      creatingGrant ||
+                      !guardianUserId.trim() ||
+                      !s.consent.guardian
+                    }
+                  >
+                    {creatingGrant ? "Granting..." : "Grant access"}
+                  </Button>
+
+                  {!s.consent.guardian && (
+                    <p className="text-xs text-destructive">
+                      Enable Guardian Access in consent settings before granting.
+                    </p>
+                  )}
+                </div>
+
                 {grants.map((grant) => (
                   <div
                     key={grant.id}
@@ -270,7 +415,7 @@ function Guardian() {
                 ))}
 
                 {!grants.length && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="pt-3 text-sm text-muted-foreground">
                     No active guardians granted.
                   </p>
                 )}
