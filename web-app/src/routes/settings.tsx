@@ -1,6 +1,6 @@
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useApp, fmt, downloadCSV } from "@/lib/store";
 import { seo } from "@/lib/seo";
@@ -34,6 +34,77 @@ function Settings() {
   const p = s.profile;
 
   const [savingProfile, setSavingProfile] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  // Load the profile belonging to the currently signed-in account.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      setLoadingProfile(true);
+
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) throw userError;
+
+        if (!user) {
+          throw new Error("Please log in again.");
+        }
+
+        const { data: profileData, error: profileError } =
+          await supabase
+            .from("profiles")
+            .select("full_name, phone")
+            .eq("id", user.id)
+            .maybeSingle();
+
+        if (profileError) throw profileError;
+
+        if (cancelled) return;
+
+        const metadataName =
+          typeof user.user_metadata?.full_name === "string"
+            ? user.user_metadata.full_name
+            : "";
+
+        s.set({
+          profile: {
+            ...useApp.getState().profile,
+            name:
+              profileData?.full_name ||
+              metadataName ||
+              "",
+            email: user.email || "",
+            phone: profileData?.phone || "",
+          },
+        });
+      } catch (error) {
+        console.error("Profile loading error:", error);
+
+        if (!cancelled) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Could not load your profile.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingProfile(false);
+        }
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const saveProfile = async () => {
     setSavingProfile(true);
@@ -45,24 +116,39 @@ function Settings() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        toast.error("Please log in again.");
-        return;
+        throw new Error("Please log in again.");
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .update({
           full_name: p.name.trim(),
           phone: p.phone.trim() || null,
         })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select("full_name, phone")
+        .single();
 
       if (error) throw error;
+
+      s.set({
+        profile: {
+          ...useApp.getState().profile,
+          name: data.full_name || "",
+          email: user.email || "",
+          phone: data.phone || "",
+        },
+      });
 
       toast.success("Profile updated successfully!");
     } catch (error) {
       console.error("Profile update error:", error);
-      toast.error("Could not update your profile.");
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not update your profile.",
+      );
     } finally {
       setSavingProfile(false);
     }
@@ -90,12 +176,16 @@ function Settings() {
                   onChange={(e) =>
                     s.set({
                       profile: {
-                        ...p,
+                        ...useApp.getState().profile,
                         [k]: e.target.value,
                       },
                     })
                   }
-                  disabled={k === "email"}
+                  disabled={
+                    k === "email" ||
+                    loadingProfile ||
+                    savingProfile
+                  }
                   type={k === "email" ? "email" : "text"}
                 />
               </div>
@@ -104,9 +194,13 @@ function Settings() {
             <Button
               className="w-full"
               onClick={saveProfile}
-              disabled={savingProfile}
+              disabled={savingProfile || loadingProfile}
             >
-              {savingProfile ? "Saving..." : "Save Profile"}
+              {loadingProfile
+                ? "Loading Profile..."
+                : savingProfile
+                  ? "Saving..."
+                  : "Save Profile"}
             </Button>
 
             <p className="text-xs text-muted-foreground">
