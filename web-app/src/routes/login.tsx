@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
+import { useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -31,6 +32,9 @@ function LoginPage() {
         setMessage(error.message);
         return;
       }
+
+      // Switch from demo mode to the real account.
+      useApp.getState().set({ demoMode: false });
 
       window.location.href = "/";
     } catch {

@@ -1,3 +1,4 @@
+
 from flask import Flask
 from flask_cors import CORS
 
@@ -20,8 +21,31 @@ def create_app(config: dict | None = None) -> Flask:
     app.extensions["storage"] = build_storage(app.config)
     app.extensions["notifier"] = build_notifier(app.config)
 
-    from .routes import health, profile, dashboard, contacts, sos, evidence, travel, devices, admin
-    for bp in (health.bp, profile.bp, dashboard.bp, contacts.bp, sos.bp, evidence.bp, travel.bp, devices.bp, admin.bp):
+    from .routes import (
+        health,
+        profile,
+        dashboard,
+        contacts,
+        guardian,
+        sos,
+        evidence,
+        travel,
+        devices,
+        admin,
+    )
+
+    for bp in (
+        health.bp,
+        profile.bp,
+        dashboard.bp,
+        contacts.bp,
+        guardian.bp,
+        sos.bp,
+        evidence.bp,
+        travel.bp,
+        devices.bp,
+        admin.bp,
+    ):
         app.register_blueprint(bp, url_prefix="/api")
 
     register_error_handlers(app)
