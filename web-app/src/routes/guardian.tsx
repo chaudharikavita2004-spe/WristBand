@@ -28,6 +28,26 @@ type SosEvent = {
   created_at: string;
 };
 
+type ReceivedGuardianGrant = {
+  id: string;
+  user_id: string;
+  guardian_user_id: string;
+  can_view_alerts: boolean;
+  can_view_location: boolean;
+  expires_at: string | null;
+  revoked_at: string | null;
+};
+
+type SharedAlert = SosEvent & {
+  owner_user_id: string;
+  location_accuracy_m?: number | null;
+};
+
+type SharedAlertsResponse = {
+  grants: ReceivedGuardianGrant[];
+  events: SharedAlert[];
+};
+
 export const Route = createFileRoute("/guardian")({
   head: () =>
     seo("Guardian Dashboard", "Authorized guardians see alerts and shared location."),
@@ -41,6 +61,10 @@ function Guardian() {
 
   const [grants, setGrants] = useState<GuardianGrant[]>([]);
   const [events, setEvents] = useState<SosEvent[]>([]);
+  const [receivedGrants, setReceivedGrants] =
+    useState<ReceivedGuardianGrant[]>([]);
+  const [sharedEvents, setSharedEvents] = useState<SharedAlert[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -102,12 +126,14 @@ function Guardian() {
           throw new Error("Please sign in again.");
         }
 
-        const [grantData, eventResult] = await Promise.all([
+        const [grantData, eventResult, sharedData] = await Promise.all([
+          // Grants created by the currently signed-in owner.
           apiRequest<GuardianGrant[]>(
             "/api/guardian/grants",
             accessToken,
           ),
 
+          // The current account's own real, active SOS events.
           supabase
             .from("sos_events")
             .select(
@@ -121,6 +147,12 @@ function Guardian() {
               "alert_sent",
             ])
             .order("created_at", { ascending: false }),
+
+          // Active grants and alerts shared with this guardian account.
+          apiRequest<SharedAlertsResponse>(
+            "/api/guardian/shared-alerts",
+            accessToken,
+          ),
         ]);
 
         if (eventResult.error) throw eventResult.error;
@@ -128,6 +160,8 @@ function Guardian() {
         if (!cancelled) {
           setGrants(grantData);
           setEvents((eventResult.data ?? []) as SosEvent[]);
+          setReceivedGrants(sharedData.grants ?? []);
+          setSharedEvents(sharedData.events ?? []);
         }
       } catch (error) {
         console.error("Guardian dashboard loading error:", error);
@@ -290,6 +324,7 @@ function Guardian() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Existing owner-side guardian management */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Granted guardians</CardTitle>
@@ -447,6 +482,50 @@ function Guardian() {
           </CardContent>
         </Card>
 
+        {/* New guardian-side received permissions */}
+        {!s.demoMode && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Accounts sharing access with you
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="divide-y">
+              {receivedGrants.map((grant) => (
+                <div key={grant.id} className="space-y-1 py-3 text-sm">
+                  <p className="break-all font-medium">
+                    Owner ID: {grant.user_id}
+                  </p>
+
+                  <p className="text-muted-foreground">
+                    {grant.can_view_alerts
+                      ? "Emergency alerts allowed"
+                      : "Emergency alerts not allowed"}
+                    {" · "}
+                    {grant.can_view_location
+                      ? "Location allowed"
+                      : "Location not allowed"}
+                  </p>
+
+                  {grant.expires_at && (
+                    <p className="text-xs text-muted-foreground">
+                      Expires:{" "}
+                      {new Date(grant.expires_at).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              ))}
+
+              {!receivedGrants.length && (
+                <p className="text-sm text-muted-foreground">
+                  No accounts have shared guardian access with you.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Live shared location</CardTitle>
@@ -460,15 +539,16 @@ function Guardian() {
                 "Not shared"
               )
             ) : (
-              "Live location is not yet connected to Supabase."
+              "Live location is not yet connected to Supabase. Location attached to authorized SOS alerts is shown below."
             )}
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-2">
+        {/* Existing owner's own active alerts */}
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              Active emergency alerts
+              Your active emergency alerts
             </CardTitle>
           </CardHeader>
 
@@ -545,13 +625,63 @@ function Guardian() {
             )}
           </CardContent>
         </Card>
+
+        {/* New guardian-side shared alerts */}
+        {!s.demoMode && (
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">
+                Emergency alerts shared with you
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="divide-y">
+              {sharedEvents.map((event) => (
+                <div key={event.id} className="space-y-1 py-3 text-sm">
+                  <p className="font-medium text-destructive">
+                    SOS · {event.trigger_type}
+                  </p>
+
+                  <p className="break-all text-xs text-muted-foreground">
+                    Shared by account: {event.owner_user_id}
+                  </p>
+
+                  <p className="text-muted-foreground">
+                    {new Date(event.created_at).toLocaleString()}
+                  </p>
+
+                  {event.latitude != null &&
+                    event.longitude != null && (
+                      <p className="text-muted-foreground">
+                        Shared location: {event.latitude.toFixed(5)},{" "}
+                        {event.longitude.toFixed(5)}
+                      </p>
+                    )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Status: {event.status}
+                  </p>
+                </div>
+              ))}
+
+              {!sharedEvents.length && (
+                <p className="text-sm text-muted-foreground">
+                  No active real SOS alerts have been shared with you.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {!s.demoMode && (
         <p className="mt-4 text-xs text-muted-foreground">
           Real-account mode reads active guardian permissions and non-demo SOS
-          events. Demo notifications and demo location are not real emergency
-          alerts or live location sharing.
+          events. Shared alert locations are displayed only when the owner has
+          granted location permission. Live location tracking, real SMS alerts,
+          and emergency phone calls are not implemented. Demo notifications
+          and demo location are not real emergency alerts or live location
+          sharing.
         </p>
       )}
     </div>
