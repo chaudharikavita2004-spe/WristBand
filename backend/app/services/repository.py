@@ -28,6 +28,33 @@ class MemoryRepository:
         rows.sort(key=lambda r: r.get(order) or "", reverse=desc)
         return copy.deepcopy(rows[:limit])
 
+    def list_received_guardian_grants(self, token, guardian_user_id):
+        now = datetime.now(timezone.utc)
+        rows = []
+
+        for grant in self._t("guardian_access"):
+            if grant.get("guardian_user_id") != guardian_user_id:
+                continue
+
+            if grant.get("revoked_at") is not None:
+                continue
+
+            expires_at = grant.get("expires_at")
+            if expires_at:
+                expiry = datetime.fromisoformat(
+                    expires_at.replace("Z", "+00:00")
+                )
+                if expiry <= now:
+                    continue
+
+            rows.append(grant)
+
+        rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+        return copy.deepcopy(rows[:200])
+
+
+
+
     def get(self, token, table, user_id, row_id):
         for r in self._t(table):
             if r["id"] == row_id and r.get("user_id") == user_id:
@@ -102,6 +129,24 @@ class SupabaseRepository:
         for k, v in (filters or {}).items():
             params[k] = f"eq.{v}"
         return self._check(requests.get(f"{self.base}/{table}", headers=self._h(token), params=params, timeout=15))
+
+    def list_received_guardian_grants(self, token, guardian_user_id):
+        params = {
+            "select": "*",
+            "guardian_user_id": f"eq.{guardian_user_id}",
+            "revoked_at": "is.null",
+            "order": "created_at.desc",
+            "limit": "200",
+        }
+
+        return self._check(
+            requests.get(
+                f"{self.base}/guardian_access",
+                headers=self._h(token),
+                params=params,
+                timeout=15,
+            )
+        )
 
     def get(self, token, table, user_id, row_id):
         rows = self._check(requests.get(f"{self.base}/{table}", headers=self._h(token),

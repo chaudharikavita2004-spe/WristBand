@@ -25,7 +25,6 @@ def list_guardian_grants():
     )
 
     now = datetime.now(timezone.utc)
-
     active_grants = []
 
     for grant in grants:
@@ -175,3 +174,77 @@ def revoke_guardian_grant(grant_id):
         raise ApiError(404, "Guardian grant not found")
 
     return jsonify({"message": "Guardian access revoked"})
+
+
+@bp.get("/guardian/shared-alerts")
+@require_auth
+def list_shared_guardian_alerts():
+    token, uid = ctx()
+
+    grants = repo().list_received_guardian_grants(token, uid)
+
+    now = datetime.now(timezone.utc)
+    active_grants = []
+    events = []
+
+    for grant in grants:
+        if grant.get("revoked_at") is not None:
+            continue
+
+        expires_at = grant.get("expires_at")
+
+        if expires_at:
+            expiry = datetime.fromisoformat(
+                expires_at.replace("Z", "+00:00")
+            )
+            if expiry <= now:
+                continue
+
+        active_grants.append(grant)
+
+        if not grant.get("can_view_alerts"):
+            continue
+
+        owner_id = grant["user_id"]
+
+        owner_events = repo().list(
+            token,
+            "sos_events",
+            owner_id,
+            order="created_at",
+            desc=True,
+            limit=200,
+        )
+
+        for event in owner_events:
+            # Exclude demo and simulated SOS events.
+            if event.get("is_demo") is not False:
+                continue
+
+            if event.get("status") not in (
+                "initiated",
+                "pending_synchronization",
+                "alert_sent",
+            ):
+                continue
+
+            shared_event = dict(event)
+            shared_event["owner_user_id"] = owner_id
+
+            # Remove location unless the owner authorized it.
+            if not grant.get("can_view_location"):
+                shared_event.pop("latitude", None)
+                shared_event.pop("longitude", None)
+                shared_event.pop("location_accuracy_m", None)
+
+            events.append(shared_event)
+
+    events.sort(
+        key=lambda event: event.get("created_at") or "",
+        reverse=True,
+    )
+
+    return jsonify({
+        "grants": active_grants,
+        "events": events,
+    })
