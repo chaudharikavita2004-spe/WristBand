@@ -187,6 +187,7 @@ def list_shared_guardian_alerts():
     active_grants = []
     events = []
 
+    # Keep only active and unexpired grants.
     for grant in grants:
         if grant.get("revoked_at") is not None:
             continue
@@ -202,10 +203,26 @@ def list_shared_guardian_alerts():
 
         active_grants.append(grant)
 
+    # Look up names only for owners who have active grants.
+    owner_ids = list({
+        grant["user_id"]
+        for grant in active_grants
+    })
+
+    owner_names = repo().get_profile_names(owner_ids)
+
+    # Add the owner's display name to received grants.
+    for grant in active_grants:
+        owner_id = grant["user_id"]
+
+        owner_name = (
+            owner_names.get(owner_id) or "Shared account"
+        )
+
+        grant["owner_name"] = owner_name
+
         if not grant.get("can_view_alerts"):
             continue
-
-        owner_id = grant["user_id"]
 
         owner_events = repo().list(
             token,
@@ -230,6 +247,7 @@ def list_shared_guardian_alerts():
 
             shared_event = dict(event)
             shared_event["owner_user_id"] = owner_id
+            shared_event["owner_name"] = owner_name
 
             # Remove location unless the owner authorized it.
             if not grant.get("can_view_location"):

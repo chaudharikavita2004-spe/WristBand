@@ -32,6 +32,7 @@ type ReceivedGuardianGrant = {
   id: string;
   user_id: string;
   guardian_user_id: string;
+  owner_name?: string;
   can_view_alerts: boolean;
   can_view_location: boolean;
   expires_at: string | null;
@@ -40,6 +41,7 @@ type ReceivedGuardianGrant = {
 
 type SharedAlert = SosEvent & {
   owner_user_id: string;
+  owner_name?: string;
   location_accuracy_m?: number | null;
 };
 
@@ -482,7 +484,7 @@ function Guardian() {
           </CardContent>
         </Card>
 
-        {/* New guardian-side received permissions */}
+        {/* Guardian-side received permissions */}
         {!s.demoMode && (
           <Card>
             <CardHeader>
@@ -494,8 +496,8 @@ function Guardian() {
             <CardContent className="divide-y">
               {receivedGrants.map((grant) => (
                 <div key={grant.id} className="space-y-1 py-3 text-sm">
-                  <p className="break-all font-medium">
-                    Owner ID: {grant.user_id}
+                  <p className="font-medium">
+                    {grant.owner_name || "Shared account"}
                   </p>
 
                   <p className="text-muted-foreground">
@@ -626,7 +628,7 @@ function Guardian() {
           </CardContent>
         </Card>
 
-        {/* New guardian-side shared alerts */}
+        {/* Guardian-side shared alerts */}
         {!s.demoMode && (
           <Card className="md:col-span-2">
             <CardHeader>
@@ -642,8 +644,8 @@ function Guardian() {
                     SOS · {event.trigger_type}
                   </p>
 
-                  <p className="break-all text-xs text-muted-foreground">
-                    Shared by account: {event.owner_user_id}
+                  <p className="text-xs text-muted-foreground">
+                    Shared by: {event.owner_name || "Shared account"}
                   </p>
 
                   <p className="text-muted-foreground">
