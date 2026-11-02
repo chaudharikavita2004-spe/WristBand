@@ -1,3 +1,4 @@
+
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useSyncExternalStore } from "react";
@@ -24,6 +25,7 @@ export interface Contact {
   verified: boolean;
   guardianAccess: boolean;
 }
+
 export interface Device {
   id: string;
   name: string;
@@ -33,11 +35,13 @@ export interface Device {
   authorized: boolean;
   lastSeen: number;
 }
+
 export interface Reading {
   t: number;
   bpm: number;
   source: Source;
 }
+
 export interface Incident {
   id: string;
   t: number;
@@ -49,6 +53,7 @@ export interface Incident {
   synced: boolean;
   silent: boolean;
 }
+
 export interface Notif {
   id: string;
   t: number;
@@ -59,6 +64,7 @@ export interface Notif {
   delivery: DeliveryState;
   to?: string;
 }
+
 export interface Zone {
   id: string;
   name: string;
@@ -67,6 +73,7 @@ export interface Zone {
   lng: number;
   radius: number;
 }
+
 export interface Journey {
   id: string;
   origin: string;
@@ -79,6 +86,7 @@ export interface Journey {
   status: "active" | "arrived" | "cancelled";
   deviations: number;
 }
+
 export interface Evidence {
   id: string;
   name: string;
@@ -88,14 +96,17 @@ export interface Evidence {
   t: number;
   dataUrl: string;
 }
+
 export interface RiskLog {
   t: number;
   score: number;
 }
+
 export interface CheckinLog {
   t: number;
   ok: boolean;
 }
+
 export interface Medical {
   bloodGroup: string;
   allergies: string;
@@ -139,6 +150,7 @@ interface State {
   medical: Medical;
   shield: { active: boolean; intervalMin: number; nextDue: number | null; discreet: boolean };
   location: { lat: number; lng: number; acc: number; t: number; source: Source } | null;
+  liveLocationSharing: boolean;
   adminUnlocked: boolean;
   set: (p: Partial<State>) => void;
   addNotif: (n: Omit<Notif, "id" | "t" | "read" | "delivery"> & { delivery?: DeliveryState }) => void;
@@ -204,6 +216,7 @@ const initial = {
   medical: { bloodGroup: "B+", allergies: "Penicillin", conditions: "", medications: "", notes: "", showAllergies: true, showConditions: true, showMedications: false, showNotes: false },
   shield: { active: false, intervalMin: 15, nextDue: null, discreet: false },
   location: null,
+  liveLocationSharing: false,
   adminUnlocked: false,
 };
 
@@ -265,8 +278,17 @@ export const useApp = create<State>()(
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: (s) => {
-        const { adminUnlocked, decoy, ...rest } = s;
-        void adminUnlocked; void decoy;
+        const {
+          adminUnlocked,
+          decoy,
+          liveLocationSharing,
+          ...rest
+        } = s;
+
+        void adminUnlocked;
+        void decoy;
+        void liveLocationSharing;
+
         return rest;
       },
     },

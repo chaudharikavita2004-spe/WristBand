@@ -35,6 +35,7 @@ function Settings() {
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [locationActionLoading, setLocationActionLoading] = useState(false);
 
   // Load the profile belonging to the currently signed-in account.
   useEffect(() => {
@@ -151,6 +152,86 @@ function Settings() {
       );
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  // Start live location sharing.
+  const startLocationSharing = async () => {
+    if (locationActionLoading) return;
+
+    if (s.demoMode) {
+      toast.error("Live location sharing is unavailable in Demo Mode.");
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      toast.error("Your browser does not support location sharing.");
+      return;
+    }
+
+    setLocationActionLoading(true);
+
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error || !user) {
+        throw new Error("Please log in again.");
+      }
+
+      useApp.getState().set({ liveLocationSharing: true });
+
+      toast.success("Live location sharing started. Allow GPS access if prompted.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not start location sharing.",
+      );
+    } finally {
+      setLocationActionLoading(false);
+    }
+  };
+
+  // Stop GPS tracking and delete the saved location.
+  const stopLocationSharing = async () => {
+    if (locationActionLoading) return;
+
+    setLocationActionLoading(true);
+
+    // Stop the GPS watcher immediately.
+    useApp.getState().set({ liveLocationSharing: false });
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw new Error("Please log in again.");
+      }
+
+      const { error } = await supabase
+        .from("live_locations")
+        .delete()
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast.success("Live sharing stopped and saved location deleted.");
+    } catch (error) {
+      console.error("Could not delete live location:", error);
+
+      toast.error(
+        error instanceof Error
+          ? `Sharing stopped, but location deletion failed: ${error.message}`
+          : "Sharing stopped, but saved location could not be deleted.",
+      );
+    } finally {
+      setLocationActionLoading(false);
     }
   };
 
@@ -311,6 +392,73 @@ function Settings() {
             >
               Manual test (simulate shake)
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* LIVE LOCATION SHARING */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Live Location Sharing
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                Sharing status
+              </span>
+
+              <span
+                className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                  s.liveLocationSharing
+                    ? "bg-green-500/15 text-green-600"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {s.liveLocationSharing ? "Sharing ON" : "Sharing OFF"}
+              </span>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              When enabled, your current GPS coordinates are updated in
+              your secure WristBand account. Guardians with active
+              location permission can view your shared location.
+            </p>
+
+            {s.liveLocationSharing ? (
+              <Button
+                className="w-full"
+                variant="destructive"
+                onClick={() => void stopLocationSharing()}
+                disabled={locationActionLoading}
+              >
+                {locationActionLoading
+                  ? "Stopping..."
+                  : "Stop Sharing"}
+              </Button>
+            ) : (
+              <Button
+                className="w-full"
+                onClick={() => void startLocationSharing()}
+                disabled={locationActionLoading || s.demoMode}
+              >
+                {locationActionLoading
+                  ? "Starting..."
+                  : "Start Sharing"}
+              </Button>
+            )}
+
+            {s.demoMode && (
+              <p className="text-xs text-amber-600">
+                Switch off Demo Mode to use real GPS sharing.
+              </p>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Sharing works while the app is open and location permission
+              is enabled. Stop Sharing deletes your last saved location.
+            </p>
           </CardContent>
         </Card>
 

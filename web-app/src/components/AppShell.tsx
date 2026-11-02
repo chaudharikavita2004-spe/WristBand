@@ -93,11 +93,170 @@ function useBackground() {
           });
         }
       },
-      { enableHighAccuracy: true },
+      {
+        enableHighAccuracy: false,
+        maximumAge: 30000,
+        timeout: 60000,
+      },
     );
 
     return () => navigator.geolocation.clearWatch(id);
   }, [s.consent.location]);
+
+  // Live location sharing with Supabase
+  useEffect(() => {
+    if (!s.liveLocationSharing) return;
+
+    let watchId: number | null = null;
+    let refreshTimer: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
+    let uploading = false;
+
+    const startLiveSharing = async () => {
+      if (useApp.getState().demoMode) {
+        toast.error("Live location sharing is unavailable in Demo Mode.");
+        useApp.getState().set({ liveLocationSharing: false });
+        return;
+      }
+
+      if (!("geolocation" in navigator)) {
+        toast.error("Geolocation is not supported by this browser.");
+        useApp.getState().set({ liveLocationSharing: false });
+        return;
+      }
+
+      const { data, error } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (error || !data.user) {
+        toast.error("Please log in to share your live location.");
+        useApp.getState().set({ liveLocationSharing: false });
+        return;
+      }
+
+      const userId = data.user.id;
+
+      // GPS options for Windows laptops and devices without dedicated GPS.
+      const gpsOptions: PositionOptions = {
+        enableHighAccuracy: false,
+        maximumAge: 30000,
+        timeout: 60000,
+      };
+
+      // Save the latest GPS position to Supabase.
+      const uploadPosition = async (position: GeolocationPosition) => {
+        if (cancelled || uploading) return;
+
+        uploading = true;
+
+        try {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          const accuracy = position.coords.accuracy;
+
+          // Update the app's local location.
+          useApp.getState().set({
+            location: {
+              lat: latitude,
+              lng: longitude,
+              acc: accuracy,
+              t: Date.now(),
+              source: "real",
+            },
+          });
+
+          // Upload the latest location to Supabase.
+          const { error: uploadError } = await supabase
+            .from("live_locations")
+            .upsert(
+              {
+                user_id: userId,
+                latitude,
+                longitude,
+                accuracy_m: accuracy,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "user_id" },
+            );
+
+          if (uploadError && !cancelled) {
+            console.error("Live location upload failed:", uploadError);
+            toast.error("Could not upload your location. Check your connection.");
+          }
+        } finally {
+          uploading = false;
+        }
+      };
+
+      // Handle GPS errors.
+      const handleLocationError = (error: GeolocationPositionError) => {
+        if (cancelled) return;
+
+        console.error("Live location error:", error.code, error.message);
+
+        if (error.code === error.PERMISSION_DENIED) {
+          toast.error(
+            "Location permission denied. Enable location access in your browser.",
+          );
+          useApp.getState().set({ liveLocationSharing: false });
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          toast.error(
+            "Your device could not determine a location. Check Windows location services.",
+          );
+        } else {
+          toast.error(
+            "Location request timed out. Please keep the app open and try again.",
+          );
+        }
+      };
+
+      // Upload whenever the GPS position changes.
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          void uploadPosition(position);
+        },
+        handleLocationError,
+        gpsOptions,
+      );
+
+      // Request a fresh location every 30 seconds.
+      refreshTimer = setInterval(() => {
+        if (cancelled || uploading) return;
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            void uploadPosition(position);
+          },
+          handleLocationError,
+          gpsOptions,
+        );
+      }, 30000);
+
+      // Request the first location immediately.
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          void uploadPosition(position);
+        },
+        handleLocationError,
+        gpsOptions,
+      );
+    };
+
+    void startLiveSharing();
+
+    return () => {
+      cancelled = true;
+
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+
+      if (refreshTimer !== null) {
+        clearInterval(refreshTimer);
+      }
+    };
+  }, [s.liveLocationSharing]);
 
   // Demo sensor simulation
   const demoConnected = s.devices.some(
@@ -157,7 +316,7 @@ function useBackground() {
     ) {
       lastAlert.current = Date.now();
 
-           toast.warning(
+      toast.warning(
         `Pulse advisory: ${last.bpm} BPM${last.source === "demo" ? " (DEMO)" : ""}`,
       );
     }
@@ -206,7 +365,9 @@ function useBackground() {
     window.addEventListener("online", on);
     on();
 
-    return () => window.removeEventListener("online", on);
+    return () => {
+      window.removeEventListener("online", on);
+    };
   }, []);
 
   // Check-in escalation and risk logging
@@ -307,6 +468,25 @@ export function AppShell({ children }: { children: ReactNode }) {
     setLoggingOut(true);
 
     try {
+      // Stop live sharing and remove the saved location before logout.
+      useApp.getState().set({ liveLocationSharing: false });
+
+      const { data } = await supabase.auth.getUser();
+
+      if (data.user) {
+        const { error: locationError } = await supabase
+          .from("live_locations")
+          .delete()
+          .eq("user_id", data.user.id);
+
+        if (locationError) {
+          console.error("Could not delete saved live location:", locationError);
+          toast.error("Could not remove your saved location. Please try again.");
+          setLoggingOut(false);
+          return;
+        }
+      }
+
       const { error } = await supabase.auth.signOut();
 
       if (error) {
@@ -316,7 +496,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
 
       toast.success("You have been logged out.");
-
       window.location.replace("/login");
     } catch {
       toast.error("Unable to log out. Please try again.");
@@ -480,8 +659,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <EyeOff className="h-4 w-4" />
             </Button>
-
-            <SOSButton compact />
 
             {/* Profile menu */}
             <div className="relative ml-1">

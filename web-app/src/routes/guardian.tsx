@@ -50,6 +50,14 @@ type SharedAlertsResponse = {
   events: SharedAlert[];
 };
 
+type LiveLocation = {
+  user_id: string;
+  latitude: number;
+  longitude: number;
+  accuracy_m: number | null;
+  updated_at: string;
+};
+
 export const Route = createFileRoute("/guardian")({
   head: () =>
     seo("Guardian Dashboard", "Authorized guardians see alerts and shared location."),
@@ -66,6 +74,9 @@ function Guardian() {
   const [receivedGrants, setReceivedGrants] =
     useState<ReceivedGuardianGrant[]>([]);
   const [sharedEvents, setSharedEvents] = useState<SharedAlert[]>([]);
+
+  const [liveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -186,6 +197,71 @@ function Guardian() {
       cancelled = true;
     };
   }, [s.demoMode, s.profile.name]);
+
+  // Fetch locations shared by accounts that granted location permission.
+  useEffect(() => {
+    if (s.demoMode) {
+      setLiveLocations([]);
+      return;
+    }
+
+    const ownerIds = receivedGrants
+      .filter(
+        (grant) => grant.can_view_location && !grant.revoked_at,
+      )
+      .filter(
+        (grant) =>
+          !grant.expires_at ||
+          new Date(grant.expires_at).getTime() > Date.now(),
+      )
+      .map((grant) => grant.user_id);
+
+    if (!ownerIds.length) {
+      setLiveLocations([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchLiveLocations() {
+      setLocationLoading(true);
+
+      try {
+        const { data, error } = await supabase
+          .from("live_locations")
+          .select(
+            "user_id, latitude, longitude, accuracy_m, updated_at",
+          )
+          .in("user_id", ownerIds);
+
+        if (error) throw error;
+
+        if (!cancelled) {
+          setLiveLocations((data ?? []) as LiveLocation[]);
+        }
+      } catch (error) {
+        console.error("Live location loading error:", error);
+
+        if (!cancelled) {
+          toast.error("Could not load shared live locations.");
+        }
+      } finally {
+        if (!cancelled) setLocationLoading(false);
+      }
+    }
+
+    fetchLiveLocations();
+
+    const intervalId = window.setInterval(
+      fetchLiveLocations,
+      15000,
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [s.demoMode, receivedGrants]);
 
   async function createGuardianGrant() {
     if (!s.consent.guardian) {
@@ -528,20 +604,100 @@ function Guardian() {
           </Card>
         )}
 
+        {/* Live shared location */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Live shared location</CardTitle>
           </CardHeader>
 
-          <CardContent className="text-sm">
+          <CardContent className="space-y-3 text-sm">
             {s.demoMode ? (
               s.consent.guardian && s.location ? (
-                `${s.location.lat.toFixed(5)}, ${s.location.lng.toFixed(5)} (updated ${fmt(s.location.t)})`
+                <p>
+                  {s.location.lat.toFixed(5)}, {s.location.lng.toFixed(5)}
+                  {" · Updated "}
+                  {fmt(s.location.t)}
+                </p>
               ) : (
-                "Not shared"
+                <p className="text-muted-foreground">
+                  Not shared in demo mode.
+                </p>
               )
+            ) : locationLoading && !liveLocations.length ? (
+              <p className="text-muted-foreground">
+                Loading shared locations...
+              </p>
+            ) : !receivedGrants.some(
+                (grant) =>
+                  grant.can_view_location &&
+                  !grant.revoked_at &&
+                  (!grant.expires_at ||
+                    new Date(grant.expires_at).getTime() > Date.now()),
+              ) ? (
+              <p className="text-muted-foreground">
+                No accounts have granted you location access.
+              </p>
+            ) : !liveLocations.length ? (
+              <p className="text-muted-foreground">
+                No location is currently being shared. The owner may have
+                stopped sharing or their app may be closed.
+              </p>
             ) : (
-              "Live location is not yet connected to Supabase. Location attached to authorized SOS alerts is shown below."
+              liveLocations.map((location) => {
+                const grant = receivedGrants.find(
+                  (item) => item.user_id === location.user_id,
+                );
+
+                const ageMs =
+                  Date.now() - new Date(location.updated_at).getTime();
+
+                const isStale = ageMs > 5 * 60 * 1000;
+
+                return (
+                  <div
+                    key={location.user_id}
+                    className="space-y-2 rounded-lg border p-3"
+                  >
+                    <p className="font-medium">
+                      {grant?.owner_name || "Shared account"}
+                    </p>
+
+                    {isStale && (
+                      <p className="rounded bg-destructive/10 p-2 text-destructive">
+                        This location may be outdated (last updated over 5
+                        minutes ago).
+                      </p>
+                    )}
+
+                    <p>
+                      Latitude: {location.latitude.toFixed(6)}
+                      <br />
+                      Longitude: {location.longitude.toFixed(6)}
+                    </p>
+
+                    {location.accuracy_m != null && (
+                      <p className="text-muted-foreground">
+                        GPS accuracy: approximately{" "}
+                        {Math.round(location.accuracy_m)} m
+                      </p>
+                    )}
+
+                    <p className="text-muted-foreground">
+                      Last updated:{" "}
+                      {new Date(location.updated_at).toLocaleString()}
+                    </p>
+
+                    <a
+                      href={`https://www.google.com/maps?q=${location.latitude},${location.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex text-primary underline underline-offset-4"
+                    >
+                      View on Google Maps
+                    </a>
+                  </div>
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -680,10 +836,10 @@ function Guardian() {
         <p className="mt-4 text-xs text-muted-foreground">
           Real-account mode reads active guardian permissions and non-demo SOS
           events. Shared alert locations are displayed only when the owner has
-          granted location permission. Live location tracking, real SMS alerts,
-          and emergency phone calls are not implemented. Demo notifications
-          and demo location are not real emergency alerts or live location
-          sharing.
+          granted location permission. Live location updates require the
+          owner's app to remain open. Real SMS alerts and emergency phone
+          calls are not implemented. Demo notifications and demo location
+          are not real emergency alerts or live location sharing.
         </p>
       )}
     </div>
