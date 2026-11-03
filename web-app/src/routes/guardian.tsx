@@ -21,11 +21,11 @@ type GuardianGrant = {
 
 type SosEvent = {
   id: string;
-  trigger: string;
+  trigger_type: string;
   status: string;
-  lat: number | null;
-  lng: number | null;
-  accuracy_m?: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_accuracy_m?: number | null;
   created_at: string;
 };
 
@@ -43,7 +43,6 @@ type ReceivedGuardianGrant = {
 type SharedAlert = SosEvent & {
   owner_user_id: string;
   owner_name?: string;
-  accuracy_m?: number | null;
 };
 
 type SharedAlertsResponse = {
@@ -147,14 +146,21 @@ function Guardian() {
             accessToken,
           ),
 
-          // The current account's own real, active SOS events.
+          // The current account's own real, unresolved SOS events.
           supabase
             .from("sos_events")
             .select(
-              "id, trigger, status, lat, lng, accuracy_m, created_at",
+              "id, trigger_type, status, latitude, longitude, location_accuracy_m, created_at",
             )
             .eq("user_id", user.id)
-            .eq("status", "active")
+            .eq("is_demo", false)
+            .in("status", [
+              "initiated",
+              "pending_synchronization",
+              "alert_sent",
+              "acknowledged",
+              "delivery_failed",
+            ])
             .order("created_at", { ascending: false }),
 
           // Active grants and alerts shared with this guardian account.
@@ -749,18 +755,18 @@ function Guardian() {
                 {events.map((event) => (
                   <div key={event.id} className="py-3 text-sm">
                     <p className="font-medium text-destructive">
-                      SOS · {event.trigger}
+                      SOS · {event.trigger_type}
                     </p>
 
                     <p className="text-muted-foreground">
                       {new Date(event.created_at).toLocaleString()}
                     </p>
 
-                    {event.lat != null &&
-                      event.lng != null && (
+                    {event.latitude != null &&
+                      event.longitude != null && (
                         <p className="mt-1 text-muted-foreground">
-                          Location: {event.lat.toFixed(5)},{" "}
-                          {event.lng.toFixed(5)}
+                          Location: {event.latitude.toFixed(5)},{" "}
+                          {event.longitude.toFixed(5)}
                         </p>
                       )}
 
@@ -793,7 +799,7 @@ function Guardian() {
               {sharedEvents.map((event) => (
                 <div key={event.id} className="space-y-1 py-3 text-sm">
                   <p className="font-medium text-destructive">
-                    SOS · {event.trigger}
+                    SOS · {event.trigger_type}
                   </p>
 
                   <p className="text-xs text-muted-foreground">
@@ -804,11 +810,11 @@ function Guardian() {
                     {new Date(event.created_at).toLocaleString()}
                   </p>
 
-                  {event.lat != null &&
-                    event.lng != null && (
+                  {event.latitude != null &&
+                    event.longitude != null && (
                       <p className="text-muted-foreground">
-                        Shared location: {event.lat.toFixed(5)},{" "}
-                        {event.lng.toFixed(5)}
+                        Shared location: {event.latitude.toFixed(5)},{" "}
+                        {event.longitude.toFixed(5)}
                       </p>
                     )}
 
