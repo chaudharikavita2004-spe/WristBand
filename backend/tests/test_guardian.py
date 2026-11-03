@@ -197,26 +197,27 @@ def test_guardian_can_see_received_grant(client):
     assert data["events"] == []
 
 
-def test_guardian_sees_only_real_shared_alerts(client):
+def test_guardian_sees_only_active_shared_alerts(client):
     create_test_grant(client)
 
     repo = client.application.extensions["repo"]
 
     repo.insert("tok-alice", "sos_events", {
         "user_id": "u-alice",
-        "status": "alert_sent",
-        "is_demo": False,
-        "latitude": 19.99,
-        "longitude": 73.78,
-        "location_accuracy_m": 10,
+        "trigger": "button",
+        "status": "active",
+        "lat": 19.99,
+        "lng": 73.78,
+        "accuracy_m": 10,
     })
 
     repo.insert("tok-alice", "sos_events", {
         "user_id": "u-alice",
-        "status": "alert_sent",
-        "is_demo": True,
-        "latitude": 19.99,
-        "longitude": 73.78,
+        "trigger": "button",
+        "status": "cancelled",
+        "lat": 19.99,
+        "lng": 73.78,
+        "accuracy_m": 10,
     })
 
     response = client.get(
@@ -228,7 +229,8 @@ def test_guardian_sees_only_real_shared_alerts(client):
 
     events = response.get_json()["events"]
     assert len(events) == 1
-    assert events[0]["is_demo"] is False
+    assert events[0]["status"] == "active"
+    assert events[0]["trigger"] == "button"
     assert events[0]["owner_user_id"] == "u-alice"
 
 
@@ -246,11 +248,11 @@ def test_guardian_cannot_see_location_without_permission(client):
 
     repo.insert("tok-alice", "sos_events", {
         "user_id": "u-alice",
-        "status": "alert_sent",
-        "is_demo": False,
-        "latitude": 19.99,
-        "longitude": 73.78,
-        "location_accuracy_m": 10,
+        "trigger": "button",
+        "status": "active",
+        "lat": 19.99,
+        "lng": 73.78,
+        "accuracy_m": 10,
     })
 
     response = client.get(
@@ -259,11 +261,14 @@ def test_guardian_cannot_see_location_without_permission(client):
     )
 
     assert response.status_code == 200
-    event = response.get_json()["events"][0]
 
-    assert "latitude" not in event
-    assert "longitude" not in event
-    assert "location_accuracy_m" not in event
+    events = response.get_json()["events"]
+    assert len(events) == 1
+
+    event = events[0]
+    assert "lat" not in event
+    assert "lng" not in event
+    assert "accuracy_m" not in event
 
 
 def test_guardian_cannot_see_alerts_without_alert_permission(client):
@@ -280,10 +285,10 @@ def test_guardian_cannot_see_alerts_without_alert_permission(client):
 
     repo.insert("tok-alice", "sos_events", {
         "user_id": "u-alice",
-        "status": "alert_sent",
-        "is_demo": False,
-        "latitude": 19.99,
-        "longitude": 73.78,
+        "trigger": "button",
+        "status": "active",
+        "lat": 19.99,
+        "lng": 73.78,
     })
 
     response = client.get(

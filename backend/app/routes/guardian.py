@@ -234,15 +234,8 @@ def list_shared_guardian_alerts():
         )
 
         for event in owner_events:
-            # Exclude demo and simulated SOS events.
-            if event.get("is_demo") is not False:
-                continue
-
-            if event.get("status") not in (
-                "initiated",
-                "pending_synchronization",
-                "alert_sent",
-            ):
+            # Only share active SOS events.
+            if event.get("status") != "active":
                 continue
 
             shared_event = dict(event)
@@ -251,9 +244,9 @@ def list_shared_guardian_alerts():
 
             # Remove location unless the owner authorized it.
             if not grant.get("can_view_location"):
-                shared_event.pop("latitude", None)
-                shared_event.pop("longitude", None)
-                shared_event.pop("location_accuracy_m", None)
+                shared_event.pop("lat", None)
+                shared_event.pop("lng", None)
+                shared_event.pop("accuracy_m", None)
 
             events.append(shared_event)
 

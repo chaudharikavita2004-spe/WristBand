@@ -21,10 +21,11 @@ type GuardianGrant = {
 
 type SosEvent = {
   id: string;
-  trigger_type: string;
+  trigger: string;
   status: string;
-  latitude: number | null;
-  longitude: number | null;
+  lat: number | null;
+  lng: number | null;
+  accuracy_m?: number | null;
   created_at: string;
 };
 
@@ -42,7 +43,7 @@ type ReceivedGuardianGrant = {
 type SharedAlert = SosEvent & {
   owner_user_id: string;
   owner_name?: string;
-  location_accuracy_m?: number | null;
+  accuracy_m?: number | null;
 };
 
 type SharedAlertsResponse = {
@@ -150,15 +151,10 @@ function Guardian() {
           supabase
             .from("sos_events")
             .select(
-              "id, trigger_type, status, latitude, longitude, created_at",
+              "id, trigger, status, lat, lng, accuracy_m, created_at",
             )
             .eq("user_id", user.id)
-            .eq("is_demo", false)
-            .in("status", [
-              "initiated",
-              "pending_synchronization",
-              "alert_sent",
-            ])
+            .eq("status", "active")
             .order("created_at", { ascending: false }),
 
           // Active grants and alerts shared with this guardian account.
@@ -753,18 +749,18 @@ function Guardian() {
                 {events.map((event) => (
                   <div key={event.id} className="py-3 text-sm">
                     <p className="font-medium text-destructive">
-                      SOS · {event.trigger_type}
+                      SOS · {event.trigger}
                     </p>
 
                     <p className="text-muted-foreground">
                       {new Date(event.created_at).toLocaleString()}
                     </p>
 
-                    {event.latitude != null &&
-                      event.longitude != null && (
+                    {event.lat != null &&
+                      event.lng != null && (
                         <p className="mt-1 text-muted-foreground">
-                          Location: {event.latitude.toFixed(5)},{" "}
-                          {event.longitude.toFixed(5)}
+                          Location: {event.lat.toFixed(5)},{" "}
+                          {event.lng.toFixed(5)}
                         </p>
                       )}
 
@@ -797,7 +793,7 @@ function Guardian() {
               {sharedEvents.map((event) => (
                 <div key={event.id} className="space-y-1 py-3 text-sm">
                   <p className="font-medium text-destructive">
-                    SOS · {event.trigger_type}
+                    SOS · {event.trigger}
                   </p>
 
                   <p className="text-xs text-muted-foreground">
@@ -808,11 +804,11 @@ function Guardian() {
                     {new Date(event.created_at).toLocaleString()}
                   </p>
 
-                  {event.latitude != null &&
-                    event.longitude != null && (
+                  {event.lat != null &&
+                    event.lng != null && (
                       <p className="text-muted-foreground">
-                        Shared location: {event.latitude.toFixed(5)},{" "}
-                        {event.longitude.toFixed(5)}
+                        Shared location: {event.lat.toFixed(5)},{" "}
+                        {event.lng.toFixed(5)}
                       </p>
                     )}
 
@@ -834,7 +830,7 @@ function Guardian() {
 
       {!s.demoMode && (
         <p className="mt-4 text-xs text-muted-foreground">
-          Real-account mode reads active guardian permissions and non-demo SOS
+          Real-account mode reads active guardian permissions and active SOS
           events. Shared alert locations are displayed only when the owner has
           granted location permission. Live location updates require the
           owner's app to remain open. Real SMS alerts and emergency phone
