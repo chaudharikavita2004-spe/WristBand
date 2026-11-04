@@ -136,7 +136,14 @@ class MemoryRepository:
             "users": len(self._t("profiles")),
             "sos_active": sum(
                 1 for r in self._t("sos_events")
-                if r["status"] == "active"
+                if r["status"] in (
+                    "initiated",
+                    "pending_synchronization",
+                    "alert_sent",
+                    "acknowledged",
+                    "delivery_failed",
+                )
+                and not r.get("is_demo", False)
             ),
             "sos_total": len(self._t("sos_events")),
             "evidence_items": len(self._t("evidence")),
@@ -396,7 +403,13 @@ class SupabaseRepository:
             "users": self._count("profiles"),
             "sos_active": self._count(
                 "sos_events",
-                {"status": "eq.active"},
+                {
+                    "status": (
+                        "in.(initiated,pending_synchronization,"
+                        "alert_sent,acknowledged,delivery_failed)"
+                    ),
+                    "is_demo": "eq.false",
+                },
             ),
             "sos_total": self._count("sos_events"),
             "evidence_items": self._count("evidence"),
@@ -416,7 +429,10 @@ class SupabaseRepository:
                 f"{self.base}/sos_events",
                 headers=h,
                 params={
-                    "select": "id,user_id,status,trigger,lat,lng,created_at",
+                    "select": (
+                        "id,user_id,trigger_type,status,latitude,longitude,"
+                        "location_accuracy_m,is_demo,created_at"
+                    ),
                     "order": "created_at.desc",
                     "limit": str(limit),
                 },

@@ -11,6 +11,34 @@ from ._util import ctx, repo
 bp = Blueprint("guardian", __name__)
 
 
+# SOS statuses that should remain visible to guardians.
+# Resolved and cancelled events are not active alerts.
+ACTIVE_SOS_STATUSES = (
+    "initiated",
+    "pending_synchronization",
+    "alert_sent",
+    "acknowledged",
+    "delivery_failed",
+)
+
+
+def is_grant_active(grant, now):
+    """Return whether a guardian grant is active and unexpired."""
+    if grant.get("revoked_at") is not None:
+        return False
+
+    expires_at = grant.get("expires_at")
+
+    if expires_at:
+        expiry = datetime.fromisoformat(
+            expires_at.replace("Z", "+00:00")
+        )
+        if expiry <= now:
+            return False
+
+    return True
+
+
 @bp.get("/guardian/grants")
 @require_auth
 def list_guardian_grants():
@@ -25,22 +53,11 @@ def list_guardian_grants():
     )
 
     now = datetime.now(timezone.utc)
-    active_grants = []
 
-    for grant in grants:
-        if grant.get("revoked_at") is not None:
-            continue
-
-        expires_at = grant.get("expires_at")
-
-        if expires_at:
-            expiry = datetime.fromisoformat(
-                expires_at.replace("Z", "+00:00")
-            )
-            if expiry <= now:
-                continue
-
-        active_grants.append(grant)
+    active_grants = [
+        grant for grant in grants
+        if is_grant_active(grant, now)
+    ]
 
     return jsonify(active_grants)
 
@@ -108,20 +125,13 @@ def create_guardian_grant():
         desc=True,
     )
 
+    now = datetime.now(timezone.utc)
+
     for grant in existing_grants:
         if (
             grant.get("guardian_user_id") == guardian_user_id
-            and grant.get("revoked_at") is None
+            and is_grant_active(grant, now)
         ):
-            existing_expiry = grant.get("expires_at")
-
-            if existing_expiry:
-                parsed_expiry = datetime.fromisoformat(
-                    existing_expiry.replace("Z", "+00:00")
-                )
-                if parsed_expiry <= datetime.now(timezone.utc):
-                    continue
-
             raise ApiError(
                 409,
                 "An active grant already exists for this guardian",
@@ -184,26 +194,14 @@ def list_shared_guardian_alerts():
     grants = repo().list_received_guardian_grants(token, uid)
 
     now = datetime.now(timezone.utc)
-    active_grants = []
+
+    active_grants = [
+        grant for grant in grants
+        if is_grant_active(grant, now)
+    ]
+
     events = []
 
-    # Keep only active and unexpired grants.
-    for grant in grants:
-        if grant.get("revoked_at") is not None:
-            continue
-
-        expires_at = grant.get("expires_at")
-
-        if expires_at:
-            expiry = datetime.fromisoformat(
-                expires_at.replace("Z", "+00:00")
-            )
-            if expiry <= now:
-                continue
-
-        active_grants.append(grant)
-
-    # Look up names only for owners who have active grants.
     owner_ids = list({
         grant["user_id"]
         for grant in active_grants
@@ -211,7 +209,6 @@ def list_shared_guardian_alerts():
 
     owner_names = repo().get_profile_names(owner_ids)
 
-    # Add the owner's display name to received grants.
     for grant in active_grants:
         owner_id = grant["user_id"]
 
@@ -234,19 +231,23 @@ def list_shared_guardian_alerts():
         )
 
         for event in owner_events:
-            # Only share active SOS events.
-            if event.get("status") != "active":
+            # Ignore simulated/demo events.
+            if event.get("is_demo") is not False:
+                continue
+
+            # Share only unresolved SOS events.
+            if event.get("status") not in ACTIVE_SOS_STATUSES:
                 continue
 
             shared_event = dict(event)
             shared_event["owner_user_id"] = owner_id
             shared_event["owner_name"] = owner_name
 
-            # Remove location unless the owner authorized it.
+            # Hide location details unless permission is granted.
             if not grant.get("can_view_location"):
-                shared_event.pop("lat", None)
-                shared_event.pop("lng", None)
-                shared_event.pop("accuracy_m", None)
+                shared_event.pop("latitude", None)
+                shared_event.pop("longitude", None)
+                shared_event.pop("location_accuracy_m", None)
 
             events.append(shared_event)
 

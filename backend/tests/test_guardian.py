@@ -24,6 +24,22 @@ def create_test_grant(client):
     )
 
 
+def create_test_sos(repo, status="alert_sent", is_demo=False):
+    return repo.insert(
+        "tok-alice",
+        "sos_events",
+        {
+            "user_id": "u-alice",
+            "trigger_type": "button",
+            "status": status,
+            "is_demo": is_demo,
+            "latitude": 19.99,
+            "longitude": 73.78,
+            "location_accuracy_m": 10,
+        },
+    )
+
+
 def test_list_guardian_grants(client):
     create_test_grant(client)
 
@@ -202,23 +218,14 @@ def test_guardian_sees_only_active_shared_alerts(client):
 
     repo = client.application.extensions["repo"]
 
-    repo.insert("tok-alice", "sos_events", {
-        "user_id": "u-alice",
-        "trigger": "button",
-        "status": "active",
-        "lat": 19.99,
-        "lng": 73.78,
-        "accuracy_m": 10,
-    })
+    # Real, active alert.
+    create_test_sos(repo, status="alert_sent", is_demo=False)
 
-    repo.insert("tok-alice", "sos_events", {
-        "user_id": "u-alice",
-        "trigger": "button",
-        "status": "cancelled",
-        "lat": 19.99,
-        "lng": 73.78,
-        "accuracy_m": 10,
-    })
+    # Cancelled alert must not be shared.
+    create_test_sos(repo, status="cancelled", is_demo=False)
+
+    # Demo alert must not be shared.
+    create_test_sos(repo, status="alert_sent", is_demo=True)
 
     response = client.get(
         "/api/guardian/shared-alerts",
@@ -228,32 +235,31 @@ def test_guardian_sees_only_active_shared_alerts(client):
     assert response.status_code == 200
 
     events = response.get_json()["events"]
+
     assert len(events) == 1
-    assert events[0]["status"] == "active"
-    assert events[0]["trigger"] == "button"
+    assert events[0]["status"] == "alert_sent"
+    assert events[0]["trigger_type"] == "button"
+    assert events[0]["is_demo"] is False
     assert events[0]["owner_user_id"] == "u-alice"
 
 
 def test_guardian_cannot_see_location_without_permission(client):
     repo = client.application.extensions["repo"]
 
-    repo.insert("tok-alice", "guardian_access", {
-        "user_id": "u-alice",
-        "guardian_user_id": "u-bob",
-        "can_view_alerts": True,
-        "can_view_location": False,
-        "expires_at": None,
-        "revoked_at": None,
-    })
+    repo.insert(
+        "tok-alice",
+        "guardian_access",
+        {
+            "user_id": "u-alice",
+            "guardian_user_id": "u-bob",
+            "can_view_alerts": True,
+            "can_view_location": False,
+            "expires_at": None,
+            "revoked_at": None,
+        },
+    )
 
-    repo.insert("tok-alice", "sos_events", {
-        "user_id": "u-alice",
-        "trigger": "button",
-        "status": "active",
-        "lat": 19.99,
-        "lng": 73.78,
-        "accuracy_m": 10,
-    })
+    create_test_sos(repo, status="alert_sent", is_demo=False)
 
     response = client.get(
         "/api/guardian/shared-alerts",
@@ -266,30 +272,28 @@ def test_guardian_cannot_see_location_without_permission(client):
     assert len(events) == 1
 
     event = events[0]
-    assert "lat" not in event
-    assert "lng" not in event
-    assert "accuracy_m" not in event
+    assert "latitude" not in event
+    assert "longitude" not in event
+    assert "location_accuracy_m" not in event
 
 
 def test_guardian_cannot_see_alerts_without_alert_permission(client):
     repo = client.application.extensions["repo"]
 
-    repo.insert("tok-alice", "guardian_access", {
-        "user_id": "u-alice",
-        "guardian_user_id": "u-bob",
-        "can_view_alerts": False,
-        "can_view_location": True,
-        "expires_at": None,
-        "revoked_at": None,
-    })
+    repo.insert(
+        "tok-alice",
+        "guardian_access",
+        {
+            "user_id": "u-alice",
+            "guardian_user_id": "u-bob",
+            "can_view_alerts": False,
+            "can_view_location": True,
+            "expires_at": None,
+            "revoked_at": None,
+        },
+    )
 
-    repo.insert("tok-alice", "sos_events", {
-        "user_id": "u-alice",
-        "trigger": "button",
-        "status": "active",
-        "lat": 19.99,
-        "lng": 73.78,
-    })
+    create_test_sos(repo, status="alert_sent", is_demo=False)
 
     response = client.get(
         "/api/guardian/shared-alerts",
