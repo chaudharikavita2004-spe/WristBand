@@ -632,6 +632,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
 
           <div className="ml-auto flex items-center gap-1">
+            <SOSButton compact />
             <Button
               size="icon"
               variant="ghost"
