@@ -1,8 +1,6 @@
-
 import { useApp, uid } from "./store";
 import type { DeviceKind } from "./store";
 
-// Real Web Bluetooth handles are kept in memory (they cannot be persisted).
 type BTDevice = {
   id: string;
   name?: string;
@@ -11,6 +9,16 @@ type BTDevice = {
 };
 
 const live = new Map<string, BTDevice>();
+
+// Custom WristBand ESP32 BLE profile
+const WRISTBAND_SERVICE_UUID =
+  "7b7a0001-1234-5678-1234-56789abcdef0";
+
+const WRISTBAND_HEART_RATE_UUID =
+  "7b7a0002-1234-5678-1234-56789abcdef0";
+
+const WRISTBAND_BATTERY_UUID =
+  "7b7a0003-1234-5678-1234-56789abcdef0";
 
 export const bleSupported = () =>
   typeof navigator !== "undefined" && "bluetooth" in navigator;
@@ -39,61 +47,133 @@ export async function scanAndConnect() {
 
   if (!nav.bluetooth) {
     throw new Error(
-      "Web Bluetooth is not supported in this browser. Use Chrome or Edge on desktop or Android, or Demo Mode."
+      "Web Bluetooth is not supported. Use Chrome or Edge on desktop or Android, or Demo Mode."
     );
   }
 
-  // Show BLE devices instead of filtering only for Heart Rate devices.
   const device: BTDevice = await nav.bluetooth.requestDevice({
     acceptAllDevices: true,
-    optionalServices: ["heart_rate", "battery_service"],
+    optionalServices: [
+      "heart_rate",
+      "battery_service",
+      WRISTBAND_SERVICE_UUID,
+    ],
   });
 
   if (!device.gatt) {
     throw new Error("This Bluetooth device does not support GATT connections.");
   }
 
-  let server: any;
-
   try {
-    server = await device.gatt.connect();
+    const server = await device.gatt.connect();
 
-    // A compatible device must expose the standard Heart Rate service.
-    let hrService: any;
     let hrCharacteristic: any;
+    let protocol: "ble-heart-rate" | "ble-custom";
 
+    // First try the standard Bluetooth Heart Rate service.
     try {
-      hrService = await server.getPrimaryService("heart_rate");
-      hrCharacteristic = await hrService.getCharacteristic(
+      const service = await server.getPrimaryService("heart_rate");
+      hrCharacteristic = await service.getCharacteristic(
         "heart_rate_measurement"
       );
+      protocol = "ble-heart-rate";
     } catch {
-      throw new Error(
-        "This device does not expose the standard Heart Rate service (0x180D). It may require a custom device-specific integration."
-      );
+      // If standard Heart Rate is unavailable, try WristBand's custom profile.
+      try {
+        const service = await server.getPrimaryService(
+          WRISTBAND_SERVICE_UUID
+        );
+
+        hrCharacteristic = await service.getCharacteristic(
+          WRISTBAND_HEART_RATE_UUID
+        );
+
+        protocol = "ble-custom";
+      } catch {
+        throw new Error(
+          "This device does not expose a supported Heart Rate service or WristBand custom BLE service."
+        );
+      }
     }
 
-    // Start notifications before marking the device as connected.
     await hrCharacteristic.startNotifications();
 
     const name = device.name || "BLE Heart Rate Sensor";
     const deviceType = detectDeviceType(name);
 
-    // Battery support is optional.
     let battery: number | null = null;
     let batterySupported = false;
 
+    // Try standard Battery Service first.
     try {
       const batteryService = await server.getPrimaryService("battery_service");
       const batteryCharacteristic =
         await batteryService.getCharacteristic("battery_level");
 
       const value = await batteryCharacteristic.readValue();
-      battery = value.getUint8(0);
-      batterySupported = true;
+
+      if (value.byteLength >= 1) {
+        battery = value.getUint8(0);
+        batterySupported = true;
+      }
     } catch {
-      // The device may not expose battery information.
+      // Standard battery service is optional.
     }
+
+    // If standard battery information is unavailable, try custom battery data.
+    if (!batterySupported) {
+      try {
+        const service = await server.getPrimaryService(
+          WRISTBAND_SERVICE_UUID
+        );
+
+        const characteristic = await service.getCharacteristic(
+          WRISTBAND_BATTERY_UUID
+        );
+
+        const value = await characteristic.readValue();
+
+        if (value.byteLength >= 1) {
+          battery = value.getUint8(0);
+          batterySupported = true;
+        }
+      } catch {
+        // Custom battery information is optional.
+      }
+    }
+
+    // Listen for actual heart-rate notifications.
+    hrCharacteristic.addEventListener(
+      "characteristicvaluechanged",
+      (event: any) => {
+        const value: DataView = event.target.value;
+
+        if (!value || value.byteLength < 2) return;
+
+        let bpm: number;
+
+        if (protocol === "ble-custom") {
+          // Custom WristBand format: 2-byte unsigned integer, little-endian.
+          bpm = value.getUint16(0, true);
+        } else {
+          // Standard Bluetooth Heart Rate Measurement format.
+          const flags = value.getUint8(0);
+
+          bpm =
+            flags & 1
+              ? value.getUint16(1, true)
+              : value.getUint8(1);
+        }
+
+        if (bpm < 20 || bpm > 250) return;
+
+        useApp.getState().addReading({
+          t: Date.now(),
+          bpm,
+          source: "real",
+        });
+      }
+    );
 
     const entry = {
       id: device.id,
@@ -104,58 +184,37 @@ export async function scanAndConnect() {
       authorized: true,
       lastSeen: Date.now(),
       deviceType,
-      protocol: "ble-heart-rate" as const,
+      protocol,
       manufacturer: undefined,
       heartRateSupported: true,
       batterySupported,
     };
 
-    // Read actual Heart Rate Measurement notifications.
-    hrCharacteristic.addEventListener(
-      "characteristicvaluechanged",
-      (event: any) => {
-        const value: DataView = event.target.value;
-
-        if (!value || value.byteLength < 2) return;
-
-        const flags = value.getUint8(0);
-        const bpm = flags & 1
-          ? value.getUint16(1, true)
-          : value.getUint8(1);
-
-        useApp.getState().addReading({
-          t: Date.now(),
-          bpm,
-          source: "real",
-        });
-      }
-    );
-
     live.set(device.id, device);
 
-    const st = useApp.getState();
+    const state = useApp.getState();
 
-    st.set({
+    state.set({
       devices: [
         entry,
-        ...st.devices.filter((item) => item.id !== device.id),
+        ...state.devices.filter((item) => item.id !== device.id),
       ],
     });
 
     device.addEventListener("gattserverdisconnected", () => {
       live.delete(device.id);
 
-      const state = useApp.getState();
+      const current = useApp.getState();
 
-      state.set({
-        devices: state.devices.map((item) =>
+      current.set({
+        devices: current.devices.map((item) =>
           item.id === device.id
             ? { ...item, status: "disconnected" }
             : item
         ),
       });
 
-      state.addNotif({
+      current.addNotif({
         category: "device",
         title: "Wristband disconnected",
         body: `${name} lost connection.`,
@@ -164,7 +223,6 @@ export async function scanAndConnect() {
 
     return entry;
   } catch (error) {
-    // Do not leave an incompatible or failed connection open.
     if (device.gatt?.connected) {
       device.gatt.disconnect();
     }
