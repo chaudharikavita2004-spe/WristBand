@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useApp, fmt, downloadCSV } from "@/lib/store";
 import { seo } from "@/lib/seo";
 import { supabase } from "@/lib/supabase";
+import { apiRequest } from "@/lib/api";
 import { PageHeader } from "@/components/AppShell";
 import { DeliveryPill } from "@/components/common";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,8 +35,13 @@ function Settings() {
   const p = s.profile;
 
   const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPins, setSavingPins] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [locationActionLoading, setLocationActionLoading] = useState(false);
+
+  // Keep PIN edits separate until the backend confirms they are saved.
+  const [unlockPinDraft, setUnlockPinDraft] = useState(s.unlockPin);
+  const [duressPinDraft, setDuressPinDraft] = useState(s.duressPin);
 
   // Load the profile belonging to the currently signed-in account.
   useEffect(() => {
@@ -107,6 +113,7 @@ function Settings() {
     };
   }, []);
 
+  // Save profile information.
   const saveProfile = async () => {
     setSavingProfile(true);
 
@@ -152,6 +159,71 @@ function Settings() {
       );
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  // Save PINs through the authenticated backend.
+  const savePins = async () => {
+    if (s.demoMode) {
+      toast.error("Switch off Demo Mode to save PINs.");
+      return;
+    }
+
+    // Capture the values being saved.
+    const unlockPin = unlockPinDraft;
+    const duressPin = duressPinDraft;
+
+    if (!/^\d{4,8}$/.test(unlockPin)) {
+      toast.error("Unlock PIN must contain 4–8 digits.");
+      return;
+    }
+
+    if (!/^\d{4,8}$/.test(duressPin)) {
+      toast.error("Duress PIN must contain 4–8 digits.");
+      return;
+    }
+
+    if (unlockPin === duressPin) {
+      toast.error("Unlock PIN and duress PIN must be different.");
+      return;
+    }
+
+    setSavingPins(true);
+
+    try {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) throw error;
+
+      const accessToken = data.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Please log in again.");
+      }
+
+      await apiRequest("/api/me", accessToken, {
+        method: "PATCH",
+        body: JSON.stringify({
+          cancel_pin: unlockPin,
+          duress_pin: duressPin,
+        }),
+      });
+
+      // Update active app PINs only after backend success.
+      s.set({
+        unlockPin,
+        duressPin,
+      });
+
+      toast.success("PINs saved to your account.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not save PINs.",
+      );
+    } finally {
+      setSavingPins(false);
     }
   };
 
@@ -301,25 +373,41 @@ function Settings() {
             <div>
               <Label>Unlock / cancel PIN</Label>
               <Input
-                value={s.unlockPin}
-                onChange={(e) =>
-                  s.set({ unlockPin: e.target.value })
-                }
+                type="password"
+                inputMode="numeric"
+                value={unlockPinDraft}
+                onChange={(e) => setUnlockPinDraft(e.target.value)}
+                disabled={savingPins}
               />
             </div>
 
             <div>
               <Label>Duress PIN</Label>
               <Input
-                value={s.duressPin}
-                onChange={(e) =>
-                  s.set({ duressPin: e.target.value })
-                }
+                type="password"
+                inputMode="numeric"
+                value={duressPinDraft}
+                onChange={(e) => setDuressPinDraft(e.target.value)}
+                disabled={savingPins}
               />
               <p className="text-xs text-muted-foreground">
                 Entering this appears to cancel but silently sends SOS.
               </p>
             </div>
+
+            <Button
+              className="w-full"
+              onClick={savePins}
+              disabled={savingPins || s.demoMode}
+            >
+              {savingPins ? "Saving PINs..." : "Save PINs"}
+            </Button>
+
+            {s.demoMode && (
+              <p className="text-xs text-amber-600">
+                Switch off Demo Mode to save PINs to your account.
+              </p>
+            )}
 
             <div>
               <Label>SOS countdown: {s.sosCountdown}s</Label>

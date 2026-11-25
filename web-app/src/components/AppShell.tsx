@@ -397,8 +397,31 @@ function useBackground() {
           body: "No response within 1 minute grace period.",
         });
 
-        st.triggerSOS("checkin", st.shield.discreet);
-        toast.error("Missed check-in. Emergency contacts alerted.");
+        if (st.demoMode) {
+          st.triggerSOS("checkin", st.shield.discreet);
+          toast.error("Missed check-in — Demo SOS simulated.");
+        } else {
+          void st
+            .triggerSOSRemote("checkin", st.shield.discreet)
+            .then(({ alerts }) => {
+              if (alerts.sent > 0) {
+                toast.error(
+                  `Missed check-in — ${alerts.sent} SMS alert(s) sent.`,
+                );
+              } else {
+                toast.error(
+                  `Missed check-in — ${alerts.message}`,
+                );
+              }
+            })
+            .catch((error) => {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Missed check-in. SOS could not be confirmed. Call 112 if needed.",
+              );
+            });
+        }
       }
 
       const rl = st.riskLogs.at(-1);
