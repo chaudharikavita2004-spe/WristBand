@@ -258,8 +258,15 @@ export function disconnect(id: string) {
 export function addDemoDevice() {
   const state = useApp.getState();
 
+  // Reuse an existing demo device instead of creating duplicates.
+  const existing = state.devices.find(
+    (item) =>
+      item.source === "demo" &&
+      item.name === "WristBand Demo Sensor"
+  );
+
   const device = {
-    id: "demo-" + uid(),
+    id: existing?.id || "demo-" + uid(),
     name: "WristBand Demo Sensor",
     source: "demo" as const,
     status: "connected" as const,
@@ -272,8 +279,18 @@ export function addDemoDevice() {
     batterySupported: true,
   };
 
+  // Remove duplicate demo entries and keep one device.
   state.set({
-    devices: [device, ...state.devices],
+    devices: [
+      device,
+      ...state.devices.filter(
+        (item) =>
+          !(
+            item.source === "demo" &&
+            item.name === "WristBand Demo Sensor"
+          )
+      ),
+    ],
   });
 
   return device;
