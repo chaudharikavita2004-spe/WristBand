@@ -803,8 +803,9 @@ export function computeRisk(
 ) {
   const factors: { label: string; points: number }[] = [];
 
-  const last = s.readings.at(-1);
-
+const last = [...s.readings]
+  .reverse()
+  .find((reading) => reading.source === "real");
   if (last && Date.now() - last.t < 60_000) {
     if (last.bpm > s.pulseHigh) {
       factors.push({

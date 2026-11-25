@@ -258,20 +258,23 @@ function useBackground() {
     };
   }, [s.liveLocationSharing]);
 
-  // Demo sensor simulation
+
+  // Demo sensor simulation — never run in Real Mode.
   const demoConnected = s.devices.some(
     (d) => d.source === "demo" && d.status === "connected",
   );
 
   useEffect(() => {
-    if (!demoConnected) return;
+    if (!s.demoMode || !demoConnected) return;
 
     let base = 78;
 
+    // Generate simulated heart-rate readings every 2 seconds.
     const id = setInterval(() => {
       base += (Math.random() - 0.5) * 4;
       base = Math.max(62, Math.min(100, base));
 
+      // Occasional simulated variation for dashboard demonstration.
       const spike = Math.random() < 0.02 ? 45 : 0;
 
       useApp.getState().addReading({
@@ -281,15 +284,18 @@ function useBackground() {
       });
     }, 2000);
 
+    // Simulate demo battery consumption once per minute.
     const bid = setInterval(() => {
       const st = useApp.getState();
 
       st.set({
         devices: st.devices.map((d) =>
-          d.source === "demo" && d.battery
+          d.source === "demo" &&
+          d.status === "connected" &&
+          d.battery != null
             ? {
                 ...d,
-                battery: Math.max(5, d.battery - 1),
+                battery: Math.max(0, d.battery - 1),
                 lastSeen: Date.now(),
               }
             : d,
@@ -301,7 +307,8 @@ function useBackground() {
       clearInterval(id);
       clearInterval(bid);
     };
-  }, [demoConnected]);
+  }, [demoConnected, s.demoMode]);
+
 
   // Abnormal pulse alerts
   const last = s.readings.at(-1);
