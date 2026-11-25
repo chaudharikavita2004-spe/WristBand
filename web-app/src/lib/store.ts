@@ -28,6 +28,20 @@ export interface Contact {
   guardianAccess: boolean;
 }
 
+
+export type DeviceKind =
+  | "esp32"
+  | "arduino"
+  | "fitness-band"
+  | "generic-ble"
+  | "demo";
+
+export type DeviceProtocol =
+  | "ble-heart-rate"
+  | "ble-custom"
+  | "bluetooth-classic"
+  | "demo";
+
 export interface Device {
   id: string;
   name: string;
@@ -36,7 +50,17 @@ export interface Device {
   battery: number | null;
   authorized: boolean;
   lastSeen: number;
+
+  // Hardware identification
+  deviceType?: DeviceKind;
+  protocol?: DeviceProtocol;
+  manufacturer?: string;
+
+  // Supported sensor capabilities
+  heartRateSupported?: boolean;
+  batterySupported?: boolean;
 }
+
 
 export interface Reading {
   t: number;
